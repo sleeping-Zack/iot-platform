@@ -12,7 +12,7 @@ class DailySummarySerializer(serializers.ModelSerializer):
 from rest_framework import serializers
 
 class CloudPointSerializer(serializers.Serializer):
-    ts = serializers.DateTimeField()
+    ts = serializers.CharField()
     value = serializers.FloatField()
 
 class DailySeriesSerializer(serializers.Serializer):
