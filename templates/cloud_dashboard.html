@@ -120,8 +120,10 @@
         const labels = series.map(p => fmtTime(p.ts));
         const values = series.map(p => p.value);
         upsertLine(labels, values);
-
-        const daily = await fetchJSON(`/api/report/daily/series?device_code=${encodeURIComponent(d)}&days=${days}`);
+        const qsDaily = new URLSearchParams({ device_code: d, days });
+        if (from) qsDaily.set('from', from);
+        if (to)   qsDaily.set('to', to);
+        const daily = await fetchJSON(`/api/report/daily/series?${qsDaily.toString()}`);
         const daysL = daily.map(x => x.day);
         const avg   = daily.map(x => x.avg_value ?? 0);
         const maxv  = daily.map(x => x.max_value ?? 0);
