@@ -25,7 +25,7 @@ SECRET_KEY = "django-insecure-t=%_($a3)q4wol$)p+%w4&#d7rnbwzevonoru@nl0kx6%u1_t+
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ['*']
 
 
 # Application definition
@@ -57,7 +57,7 @@ ROOT_URLCONF = "iot_platform.urls"
 TEMPLATES = [
     {
         "BACKEND": "django.template.backends.django.DjangoTemplates",
-        "DIRS": [],
+        "DIRS": [BASE_DIR / "templates"],
         "APP_DIRS": True,
         "OPTIONS": {
             "context_processors": [
@@ -77,11 +77,22 @@ WSGI_APPLICATION = "iot_platform.wsgi.application"
 # https://docs.djangoproject.com/en/5.0/ref/settings/#databases
 
 DATABASES = {
-    "default": {
-        "ENGINE": "django.db.backends.sqlite3",
-        "NAME": BASE_DIR / "db.sqlite3",
-    }
+  "default": {
+    "ENGINE": "django.db.backends.mysql",
+    "NAME": "iot_platform",
+    "USER": "root",
+    "PASSWORD": "root",
+    "HOST": "127.0.0.1",
+    "PORT": "13306",
+    "OPTIONS": {"charset": "utf8mb4",
+                "init_command": "SET sql_mode='STRICT_TRANS_TABLES'"},
+  }
 }
+TIME_ZONE = "UTC"       # 建议存UTC
+USE_TZ = True
+
+# settings.py
+DEMO_SKIP_DB = True   # 开启：跳过DB与校验，直接返回成功；演示后可改为 False
 
 
 # Password validation
@@ -107,11 +118,8 @@ AUTH_PASSWORD_VALIDATORS = [
 # https://docs.djangoproject.com/en/5.0/topics/i18n/
 
 LANGUAGE_CODE = "en-us"
-
-TIME_ZONE = "UTC"
-
 USE_I18N = True
-
+TIME_ZONE = 'Asia/Shanghai'
 USE_TZ = True
 
 

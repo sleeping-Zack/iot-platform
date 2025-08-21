@@ -1,15 +1,23 @@
 # Python
 __pycache__/
-*.pyc
-
-# venv
-.venv/
-
-# Env & local
-.env
-*.sqlite3
-.DS_Store
+*.py[cod]
+*.pyo
+*.pyd
+*.egg-info/
+.pytest_cache/
 
 # Django
-staticfiles/
+db.sqlite3
 media/
+staticfiles/
+
+# Env / OS / IDE
+.env
+.venv/
+venv/
+.DS_Store
+.idea/
+.vscode/
+
+node_modules/
+dist/

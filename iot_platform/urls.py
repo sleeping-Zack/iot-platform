@@ -15,8 +15,20 @@ Including another URLconf
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
 from django.contrib import admin
-from django.urls import path
-
+from django.urls import path, include
+from django.views.generic import RedirectView
 urlpatterns = [
-    path("admin/", admin.site.urls),
+    path('admin/', admin.site.urls),      # Django admin
+    path('', RedirectView.as_view(url='/charts/', permanent=False)),
+    path('', include('iotcore.urls')),   # 把 iotcore app 的路由接进来
 ]
+
+
+# 在浏览器打开 /api/docs/ 就能演示所有接口
+from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
+
+urlpatterns += [
+    path("api/schema/", SpectacularAPIView.as_view(), name="schema"),
+    path("api/docs/", SpectacularSwaggerView.as_view(url_name="schema"), name="docs"),
+]
+
