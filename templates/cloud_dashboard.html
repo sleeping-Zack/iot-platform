@@ -8,9 +8,9 @@
   <style>
     body{font-family:system-ui,Segoe UI,Arial,sans-serif; padding:16px;}
     .toolbar{display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px; align-items:center;}
-    .card{border:1px solid #e5e7eb; border-radius:12px; padding:16px; margin-bottom:16px; box-shadow: 0 1px 2px rgba(0,0,0,.04);}
-    .row{display:grid; grid-template-columns: 1fr; gap:16px;}
-    @media(min-width: 900px){ .row{ grid-template-columns: 2fr 1fr; } }
+    .card{border:1px solid #e5e7eb; border-radius:12px; padding:16px; margin-bottom:16px; box-shadow:0 1px 2px rgba(0,0,0,.04);}
+    .row{display:grid; grid-template-columns:1fr; gap:16px;}
+    @media(min-width:900px){ .row{ grid-template-columns:2fr 1fr; } }
     .muted{color:#6b7280; font-size:12px}
     button{padding:8px 12px; border-radius:10px; border:1px solid #e5e7eb; background:#fff; cursor:pointer}
     input,select{padding:8px 10px; border-radius:10px; border:1px solid #e5e7eb}
@@ -19,6 +19,7 @@
 </head>
 <body>
   <h1>IoT 云端数据可视化</h1>
+
   <div class="toolbar card">
     <label>设备代码：
       <input id="device_code" value="T-001" />
@@ -27,7 +28,7 @@
       <input id="from" placeholder="2025-08-01T00:00:00Z" />
     </label>
     <label>结束时间 (ISO)：
-      <input id="to" placeholder="2025-08-21T23:59:59Z" />
+      <input id="to"  />
     </label>
     <label>近几天（日汇总）：
       <select id="days">
@@ -38,6 +39,14 @@
     </label>
     <button id="loadBtn">加载</button>
     <span class="muted" id="status"></span>
+  </div>
+
+  <div class="card" style="margin-top:12px;">
+    <div style="display:flex;justify-content:space-between;align-items:center;">
+      <h3 style="margin:0;">实时告警（触发器瞬时写入）</h3>
+      <span id="alert-badge" style="background:#e02424;color:#fff;border-radius:10px;padding:2px 8px;">0</span>
+    </div>
+    <ul id="alert-list" style="list-style:none;padding-left:0;margin-top:8px;max-height:220px;overflow:auto;"></ul>
   </div>
 
   <div class="row">
@@ -54,6 +63,7 @@
   <script>
     const fmtTime = (s)=>new Date(s).toLocaleString();
     let lineChart, barChart;
+    let THI=null, TLO=null, lastAlertId=0;
 
     async function fetchJSON(url){
       const r = await fetch(url);
@@ -61,66 +71,99 @@
       return await r.json();
     }
 
+    // —— 折线图：温度 + 阈值虚线 + 红色告警点 ——
     function upsertLine(labels, values){
+      const hiLine = (THI!=null) ? labels.map(_=>THI) : null;
+      const loLine = (TLO!=null) ? labels.map(_=>TLO) : null;
+      const alertMask = values.map(v => ((THI!=null && v>THI) || (TLO!=null && v<TLO)) ? v : null);
+
       const ctx = document.getElementById('lineChart');
       if(lineChart) lineChart.destroy();
+
+      const datasets = [
+        { label:'温度(°C)', data: values, tension:.25, borderColor:'#3b82f6', pointRadius:0 }
+      ];
+      if (alertMask) {
+        datasets.push({
+          label:'告警点', data: alertMask,
+          showLine:false, pointRadius:5, borderWidth:0,
+          pointBackgroundColor:'#e02424', pointBorderColor:'#e02424'
+        });
+      }
+      if (hiLine) {
+        datasets.push({
+          label:'高阈值', data: hiLine, pointRadius:0,
+          borderColor:'#ef4444', borderDash:[6,6], borderWidth:1
+        });
+      }
+      if (loLine) {
+        datasets.push({
+          label:'低阈值', data: loLine, pointRadius:0,
+          borderColor:'#2563eb', borderDash:[6,6], borderWidth:1
+        });
+      }
+
       lineChart = new Chart(ctx, {
-        type: 'line',
-        data: {
-          labels,
-          datasets: [{ label: '温度(°C)', data: values, tension: .2 }]
-        },
-        options: {
-          responsive: true,
-          interaction: { mode: 'index', intersect: false },
-          scales: { x: { ticks: { maxRotation: 0, autoSkip: true } } }
+        type:'line',
+        data:{ labels, datasets },
+        options:{
+          responsive:true,
+          interaction:{ mode:'index', intersect:false },
+          scales:{ x:{ ticks:{ maxRotation:0, autoSkip:true } } }
         }
       });
     }
 
+    // —— 柱状图：日报 ——
     function upsertBars(days, avg, maxv, minv, alerts){
       const ctx = document.getElementById('barChart');
       if(barChart) barChart.destroy();
       barChart = new Chart(ctx, {
-        type: 'bar',
-        data: {
-          labels: days,
-          datasets: [
-            { label: '平均', data: avg },
-            { label: '最高', data: maxv },
-            { label: '最低', data: minv },
-            { label: '告警数', data: alerts, yAxisID: 'y1' }
+        type:'bar',
+        data:{
+          labels:days,
+          datasets:[
+            { label:'平均', data:avg },
+            { label:'最高', data:maxv },
+            { label:'最低', data:minv },
+            { label:'告警数', data:alerts, yAxisID:'y1' }
           ]
         },
-        options: {
-          responsive: true,
-          scales: {
-            y: { beginAtZero: true },
-            y1: { beginAtZero: true, position: 'right', grid: { drawOnChartArea: false } }
+        options:{
+          responsive:true,
+          scales:{
+            y:  { beginAtZero:true },
+            y1: { beginAtZero:true, position:'right', grid:{ drawOnChartArea:false } }
           }
         }
       });
     }
 
+    // —— 总加载：阈值 + 云序列 + 日报 ——
     async function load(){
-      const d = document.getElementById('device_code').value.trim();
+      const d    = document.getElementById('device_code').value.trim();
       const from = document.getElementById('from').value.trim();
       const to   = document.getElementById('to').value.trim();
       const days = document.getElementById('days').value;
-
       const status = document.getElementById('status');
       status.textContent = '加载中...';
 
       try{
-        const qsSeries = new URLSearchParams({ device_code: d });
+        // 1) 阈值
+        const th = await fetchJSON(`/api/dev/thresholds/?device_code=${encodeURIComponent(d)}`);
+        THI = th.threshold_hi; TLO = th.threshold_lo;
+
+        // 2) 云端序列
+        const qsSeries = new URLSearchParams({ device_code:d });
         if(from) qsSeries.set('from', from);
         if(to)   qsSeries.set('to', to);
-
         const series = await fetchJSON(`/api/cloud/series?${qsSeries.toString()}`);
         const labels = series.map(p => fmtTime(p.ts));
         const values = series.map(p => p.value);
         upsertLine(labels, values);
-        const qsDaily = new URLSearchParams({ device_code: d, days });
+
+        // 3) 日报
+        const qsDaily = new URLSearchParams({ device_code:d, days });
         if (from) qsDaily.set('from', from);
         if (to)   qsDaily.set('to', to);
         const daily = await fetchJSON(`/api/report/daily/series?${qsDaily.toString()}`);
@@ -138,12 +181,51 @@
       }
     }
 
-    document.getElementById('loadBtn').addEventListener('click', load);
-    // 页面载入时自动加载一次（可选）
-    load();
+    // —— 实时告警：3 秒轮询，只改右侧列表+角标；有新告警时顺带刷新折线 ——
+    async function pollAlerts(){
+      const d = document.getElementById('device_code').value.trim();
+      try{
+        const arr = await fetchJSON(`/api/alerts/recent/?device_code=${encodeURIComponent(d)}&limit=20`);
+        const list  = document.getElementById('alert-list');
+        const badge = document.getElementById('alert-badge');
 
-    // 每 15 秒自动刷新（演示用）
-    setInterval(load, 15000);
+        // 渲染列表
+        list.innerHTML = '';
+        for (const a of arr) {
+          const li = document.createElement('li');
+          li.style.cssText = 'padding:6px 4px;border-bottom:1px solid #eee';
+          li.innerHTML = `
+            <div style="display:flex;justify-content:space-between;">
+              <span style="font-weight:600;color:${a.level==='HIGH' ? '#e02424' : '#2563eb'}">${a.level}</span>
+              <small>${a.ts}</small>
+            </div>
+            <div>值：${a.value ?? '-'} ℃</div>
+            <small style="color:#666">${a.message || ''}</small>`;
+          list.appendChild(li);
+        }
+
+        // 角标与触发器“更快”的体现：新告警立刻出现（即使折线还没入云）
+        const maxId = arr.length ? arr[0].id : lastAlertId;
+        if (maxId > lastAlertId) {
+          const unread = maxId - lastAlertId;
+          lastAlertId = maxId;
+          badge.textContent = unread;
+          // 新告警刷新一次折线（红点同步出现；若云端未同步，稍后自动刷新也会补上）
+          load();
+        } else {
+          badge.textContent = 0;
+        }
+      }catch(e){
+        console.error('poll alerts', e);
+      }
+    }
+
+    // 事件与定时
+    document.getElementById('loadBtn').addEventListener('click', load);
+    load();                      // 首次加载
+    setInterval(load, 10000);    // 每 10 秒刷新云数据
+    pollAlerts();                // 立即拉一次告警
+    setInterval(pollAlerts, 1500); // 每 1.5 秒拉告警（体现触发器“秒级可见”）
   </script>
 </body>
 </html>

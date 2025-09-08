@@ -25,7 +25,7 @@ class EdgeData(models.Model):
     raw_value    = models.FloatField(null=True, blank=True)
     ts           = models.DateTimeField(auto_now_add=True)  # 服务器接收时刻
     source_ts    = models.DateTimeField(null=True, blank=True)  # 设备自带时间
-    quality      = models.CharField(max_length=12, default="GOOD")  # GOOD/ESTIMATED/BAD
+    quality      = models.IntegerField(default=1, choices=[(1,"GOOD"), (0,"BAD")])
     meta         = models.JSONField(null=True, blank=True)
 
     class Meta:
